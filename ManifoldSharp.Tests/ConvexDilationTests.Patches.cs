@@ -131,6 +131,36 @@ namespace ManifoldSharp.Tests
 		}
 
 		/// <summary>
+		/// Sliver triangles stay out of patches. The closed bracket's rounded corner carries
+		/// triangles whose height is below the solid's epsilon; their planes are set by
+		/// roundoff, so condition (1) can certify a patch of them that is really flat (two
+		/// of them on the bracket's back face once made a patch whose hull had volume
+		/// 4.7e-14).
+		/// </summary>
+		[Test]
+		public async Task SliverTrianglesStayOutOfPatches()
+		{
+			ManifoldImpl solid = ConvexDilationDegenerateTests.ClosedBracket().Solid.AsImpl();
+
+			bool IsSliver(int tri)
+			{
+				Vec3 a = solid.VertPos[solid.Halfedge[3 * tri].StartVert];
+				Vec3 b = solid.VertPos[solid.Halfedge[(3 * tri) + 1].StartVert];
+				Vec3 c = solid.VertPos[solid.Halfedge[(3 * tri) + 2].StartVert];
+				double twiceArea = Math.Sqrt(LinalgFunctions.LengthSquared(LinalgFunctions.Cross(b - a, c - a)));
+				double longest = Math.Sqrt(Math.Max(Math.Max(LinalgFunctions.LengthSquared(b - a), LinalgFunctions.LengthSquared(c - b)), LinalgFunctions.LengthSquared(a - c)));
+				return twiceArea < solid.Epsilon * longest;
+			}
+
+			List<int> slivers = Enumerable.Range(0, solid.NumTri()).Where(IsSliver).ToList();
+			await Assert.That(slivers.Count).IsGreaterThan(0).Because("the fixture must carry sliver triangles, or it does not test the rule");
+
+			List<int[]> units = ConvexPatches.Build(solid, ConvexPatches.MaxPatchSize, null)!;
+			List<int> patched = units.Where(unit => unit.Length > 1).SelectMany(unit => unit).Where(IsSliver).ToList();
+			await Assert.That(patched).IsEmpty().Because($"sliver triangles {string.Join(", ", patched)} joined a patch");
+		}
+
+		/// <summary>
 		/// The guard keeps a bore open: a small ball leaves the drilled plate's hole (genus
 		/// 1), and without the guard a patch hull spanning the bore's mouth fills it.
 		/// </summary>

@@ -51,11 +51,12 @@ namespace ManifoldSharp.Tests
 
 		/// <summary>
 		/// The L-shaped bracket closed by a 12-segment ball (grown, then shrunk back): a
-		/// single genus-0 part whose rounded inside corner carries sliver triangles. Before
-		/// the pass, dilating it by the same ball left a 4-triangle, zero-volume shell along
-		/// the seam between its back face and its bottom edge.
+		/// single genus-0 part whose rounded edges carry sliver triangles. Before the closing
+		/// pass and ConvexPatches' sliver rule, dilating it by the same ball left a
+		/// 4-triangle, zero-volume shell along the seam between its back face and its bottom
+		/// edge; either one alone repairs it, so the rule tests below pin the pass itself.
 		/// </summary>
-		private static (Manifold Solid, Manifold Ball) ClosedBracket()
+		internal static (Manifold Solid, Manifold Ball) ClosedBracket()
 		{
 			Manifold ball = Manifold.Sphere(2.0, 12);
 			Manifold bracket = Manifold.Cube(new Vec3(40.0, 20.0, 6.0), false)

@@ -50,6 +50,17 @@
 // strip of convex edges fails it. Any failure puts the patch's triangles back as
 // singletons, so doubt only costs speed.
 //
+// ── Sliver triangles stay singletons ────────────────────────────────────────────
+// (1) is exact about each triangle's plane, but a sliver's plane - a triangle whose height
+// is below the solid's epsilon - is set by roundoff, not by the surface. On a closed
+// L-bracket two slivers lying on its flat back face (all four vertices within 1e-11 of
+// the plane y = 20) each found the other's far vertex strictly below its tilted plane, so
+// (1) and the guard accepted a patch whose hull had volume 4.7e-14: the flat patch (1)
+// exists to refuse. Its hull's faces then nearly coincided with its neighbours', and the
+// tree's union left a zero-volume shell (ConvexDilation.Degenerate.cs). So a sliver
+// neither seeds nor joins a patch; it is swept as its own hull, as the per-triangle
+// tree sweeps it.
+//
 // Why not erosion: the erosion tree subtracts ⋃ (t ⊕ B) = ∂A ⊕ B, and hull(P) ⊕ B is a
 // superset that also contains int H ⊕ B - material the answer keeps. Not sound.
 //
@@ -123,6 +134,13 @@ namespace ManifoldSharp
 					return null;
 				}
 
+				if (IsSliver(solid, seed))
+				{
+					taken[seed] = true;
+					units.Add(new[] { seed });
+					continue;
+				}
+
 				// A refused patch is released and regrown from the same seed at half the
 				// cap, and always below the refused patch's size - growth that stopped short
 				// of the cap would otherwise rebuild the same patch - down to a single
@@ -176,7 +194,7 @@ namespace ManifoldSharp
 				{
 					int paired = solid.Halfedge[(3 * tri) + k].PairedHalfedge;
 					int neighbor = paired >= 0 ? paired / 3 : -1;
-					if (neighbor < 0 || taken[neighbor] || !Compatible(solid, neighbor, patch, patchVerts))
+					if (neighbor < 0 || taken[neighbor] || IsSliver(solid, neighbor) || !Compatible(solid, neighbor, patch, patchVerts))
 					{
 						continue;
 					}
@@ -199,6 +217,22 @@ namespace ManifoldSharp
 					verts.Add(v);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Whether a triangle's height is below the solid's epsilon (file header: its plane
+		/// is roundoff, so it neither seeds nor joins a patch).
+		/// </summary>
+		private static bool IsSliver(ManifoldImpl solid, int tri)
+		{
+			Vec3 a = solid.VertPos[solid.Halfedge[3 * tri].StartVert];
+			Vec3 b = solid.VertPos[solid.Halfedge[(3 * tri) + 1].StartVert];
+			Vec3 c = solid.VertPos[solid.Halfedge[(3 * tri) + 2].StartVert];
+			double twiceArea = Math.Sqrt(LinalgFunctions.LengthSquared(LinalgFunctions.Cross(b - a, c - a)));
+			double longest = Math.Sqrt(Math.Max(
+				Math.Max(LinalgFunctions.LengthSquared(b - a), LinalgFunctions.LengthSquared(c - b)),
+				LinalgFunctions.LengthSquared(a - c)));
+			return twiceArea < solid.Epsilon * longest;
 		}
 
 		/// <summary>

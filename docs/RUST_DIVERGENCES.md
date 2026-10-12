@@ -525,6 +525,18 @@ nothing to drop. `ConvexDilationDegenerateTests` pins the rule on hand-built mes
 and the bracket, a near-closing cavity, a translated tool and the thin rod's erosion
 against the sweep.
 
+Sliver triangles stay out of patches (2026-10-12): condition (1) is exact about each
+triangle's plane, but a sliver's plane - height below the solid's epsilon - is set by
+roundoff. On that bracket two slivers on its flat back face each found the other's
+far vertex strictly below its tilted plane, so a patch whose hull had volume 4.7e-14
+was accepted, the flat patch (1) exists to refuse. A sliver now neither seeds nor
+joins a patch and is swept as its own hull. That alone repairs the bracket; the
+closing pass above stays, since the shell also appears without patches. Across ten
+parts (the bracket closed, and closed then eroded, by 8- to 24-segment balls, an open
+pot, a plate with two holes) the hull count rose 2834 → 2845 and the dilation time
+by about 2%, within run-to-run noise. `ConvexDilationPatchTests.SliverTrianglesStayOutOfPatches`
+pins it on the bracket.
+
 **What does not differ:** `Minkowski.Compute`/`Sum` and `Manifold.MinkowskiSum`
 are untouched and still run the ported batches, so every ported entry point still
 produces the Rust's bits. Like entry 5, this adds a capability rather than
