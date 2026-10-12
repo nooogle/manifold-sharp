@@ -506,6 +506,25 @@ of 2% of the part: Thingi10K 40915 (4552 triangles) 4552 → 1901 hulls, 2.45 s 
 0.94 s; 42041 (6162) 6162 → 3726, 2.35 s → 1.70 s; 40984 (18110) 18110 → 5595,
 6.9 s → 2.8 s; patch building and guard 3-7% of the patched run.
 
+Degenerate components (2026-10-12): the tree's order of unions can leave what the
+serial batches did not, a collapsed, zero-volume shell beside the real solid where
+two subtrees' hulls have nearly coincident faces (an L-bracket closed by a 12-segment
+ball, dilated by the same ball: one 4-triangle sliver 40 mm long, the volume
+unchanged, genus -1 where `Minkowski.Sum` gives 0; it appears with and without
+patches). Every component of material in a dilation contains a whole copy of the
+tool, so `ConvexDilation.Degenerate.cs` closes the dilation tree with one sequential
+pass that drops any outward-wound shell with less than half the tool's volume, then
+checks the token again. Cavity shells are wound inward and are kept whatever their size:
+a sealed cavity just wider than the tool dilates to a void of almost nothing, which the
+sweep keeps. The pass runs only for a tool that contains the origin: `Minkowski.Compute`
+and the tree union the solid itself in, and with a translated tool it can come out as a
+component of its own, smaller than the tool. Erosion skips the pass: its components carry no such bound (a bar 2r + 1e-6
+across eroded by radius r leaves a real rod 1e-6 thick), and no thinness test tells
+such a rod from a stray. The pass returns the tree's mesh untouched whenever there is
+nothing to drop. `ConvexDilationDegenerateTests` pins the rule on hand-built meshes,
+and the bracket, a near-closing cavity, a translated tool and the thin rod's erosion
+against the sweep.
+
 **What does not differ:** `Minkowski.Compute`/`Sum` and `Manifold.MinkowskiSum`
 are untouched and still run the ported batches, so every ported entry point still
 produces the Rust's bits. Like entry 5, this adds a capability rather than
