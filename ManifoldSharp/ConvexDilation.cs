@@ -109,6 +109,20 @@
 // solid out of one union node — not the reduction order.)
 // Triangle lists do not agree, which is why this is a separate entry point rather
 // than a reroute.
+//
+// ── Degenerate components ───────────────────────────────────────────────────────
+// Reducing the hulls in this order can leave something the serial batches did not:
+// where two subtrees' hulls have faces that nearly coincide, their exact union can keep
+// a collapsed, zero-volume shell beside the real solid (a 4-triangle sliver 40 mm long
+// on a closed L-bracket; volume and the solid itself unchanged, genus -1 instead of 0).
+// Every component of material in a dilation contains a whole copy of the tool, so a
+// closing sequential pass after the dilation tree drops any outward-wound shell with less
+// than half the tool's volume; inward-wound cavity shells, which can be arbitrarily small,
+// are kept, and the pass runs only for a tool that contains the origin, the case in which
+// the solid itself lies inside the dilation (ConvexDilation.Degenerate.cs). Erosion skips it: its components carry
+// no such bound and can be genuinely thin. The pass leaves the mesh untouched, bit for
+// bit, whenever nothing qualifies, so the determinism argument above is unaffected, and
+// a cancel that lands during it still ends in Cancelled.
 
 using ManifoldSharp.Linalg;
 
@@ -124,7 +138,7 @@ namespace ManifoldSharp
 	/// <see cref="Minkowski.Sum"/>. See the file header for the tree and its determinism
 	/// argument.
 	/// </remarks>
-	public static class ConvexDilation
+	public static partial class ConvexDilation
 	{
 		/// <summary>
 		/// Hulls per leaf. Small enough that a leaf's BatchUnion chain is short, large
@@ -417,6 +431,20 @@ namespace ManifoldSharp
 				}
 			}
 
+			// Unions of hulls whose faces nearly coincide can leave a collapsed shell beside the
+			// real solid. A dilation's every component holds a copy of the tool, so one
+			// sequential pass drops anything smaller (ConvexDilation.Degenerate.cs); an
+			// erosion has no such bound and is left as the tree made it.
+			if (!inset && ContainsOrigin(tool))
+			{
+				outR = WithoutStrayComponents(outR, 0.5 * Math.Abs(tool.GetProperty(Property.Volume)));
+				if (Cancel.IsCancelled(token))
+				{
+					result = Boolean3Functions.CancelledImpl();
+					return true;
+				}
+			}
+
 			// Minkowski.Compute's closing AsOriginal, so the two entry points hand back the
 			// same kind of mesh: one fresh original ID, normals and coplanar faces set.
 			outR.InitializeOriginal();
@@ -499,22 +527,7 @@ namespace ManifoldSharp
 		private static bool HasOverlappingComponents(ManifoldImpl solid)
 		{
 			int numVert = solid.NumVert();
-			DisjointSets sets = new DisjointSets((uint)numVert);
-			foreach (Halfedge halfedge in solid.Halfedge)
-			{
-				if (halfedge.IsForward())
-				{
-					sets.Unite((uint)halfedge.StartVert, (uint)halfedge.EndVert);
-				}
-			}
-
-			List<int> component = new List<int>(numVert);
-			for (int i = 0; i < numVert; i++)
-			{
-				component.Add(0);
-			}
-
-			int numComponents = sets.ConnectedComponents(component);
+			int numComponents = LabelComponents(solid, out List<int> component);
 			if (numComponents <= 1)
 			{
 				return false;
